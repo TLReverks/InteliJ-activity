@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestión de Asistencia — Panel de Control</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%232563eb'/><path d='M9 17l5 5 9-11' stroke='white' stroke-width='3' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="app-shell">
+        <header class="topbar">
+            <div class="brand">
+                <div class="brand-icon" aria-hidden="true">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M9 11l3 3L22 4"></path>
+                        <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
+                    </svg>
+                </div>
+                <div>
+                    <h1>API de Asistencia</h1>
+                    <p class="subtitle">Interfaz gráfica para <code>/api/asistencia</code> (Spring Boot + JDBC MySQL)</p>
+                </div>
+            </div>
+
+            <div class="topbar-actions">
+                <div id="apiStatusBadge" class="status-pill status-loading" title="Estado de conexión con la API">
+                    <span class="status-dot"></span>
+                    <span id="apiStatusText">Conectando...</span>
+                </div>
+                <button id="btnRefreshTop" type="button" class="btn btn-secondary">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="23 4 23 10 17 10"></polyline>
+                        <polyline points="1 20 1 14 7 14"></polyline>
+                        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+                    </svg>
+                    Actualizar
+                </button>
+            </div>
+        </header>
+
+        <!-- Alerta global para respuestas HTTP (201, 400, 500, errores de red) -->
+        <div id="alertContainer" class="alert hidden" role="alert">
+            <div class="alert-content">
+                <strong id="alertTitle"></strong>
+                <p id="alertMessage"></p>
+                <small id="alertDetails" class="hidden"></small>
+            </div>
+            <button id="btnCloseAlert" type="button" class="alert-close" aria-label="Cerrar alerta">&times;</button>
+        </div>
+
+        <!-- Tarjetas de resumen -->
+        <section class="stats-grid" aria-label="Resumen de paginación">
+            <article class="stat-card">
+                <span class="stat-label">Total de Registros</span>
+                <strong id="statTotalItems" class="stat-value">0</strong>
+                <span class="stat-meta">Base de datos MySQL</span>
+            </article>
+            <article class="stat-card">
+                <span class="stat-label">Página Actual</span>
+                <strong id="statCurrentPage" class="stat-value">1 / 1</strong>
+                <span id="statPageIndex" class="stat-meta">Índice API: page=0</span>
+            </article>
+            <article class="stat-card">
+                <span class="stat-label">En esta Página</span>
+                <strong id="statPageCount" class="stat-value">0</strong>
+                <span id="statPageSizeMeta" class="stat-meta">Tamaño máximo: 10</span>
+            </article>
+            <article class="stat-card">
+                <span class="stat-label">Último Estado HTTP</span>
+                <strong id="statHttpStatus" class="stat-value">—</strong>
+                <span id="statEndpointMeta" class="stat-meta">Esperando solicitud</span>
+            </article>
+        </section>
+
+        <main class="main-grid">
+            <!-- Formulario POST /api/asistencia -->
+            <section class="card form-card" aria-labelledby="formHeading">
+                <div class="card-header">
+                    <div>
+                        <h2 id="formHeading">Nueva Asistencia</h2>
+                        <p class="card-desc">Enviar registro mediante <code>POST /api/asistencia</code></p>
+                    </div>
+                    <span class="method-badge method-post">POST</span>
+                </div>
+
+                <form id="asistenciaForm" novalidate>
+                    <div class="form-group">
+                        <label for="inputNombre">Nombre <span class="req">*</span></label>
+                        <input
+                            type="text"
+                            id="inputNombre"
+                            name="nombre"
+                            placeholder="Ej. Carlos Pérez"
+                            maxlength="255"
+                            required
+                        >
+                        <span class="field-hint">Nombre de la persona o asistente (campo <code>nombre</code>).</span>
+                    </div>
+
+                    <div class="form-group">
+                        <div class="label-row">
+                            <label for="inputFecha">Fecha (numérica) <span class="req">*</span></label>
+                            <button type="button" id="btnFechaHoy" class="link-btn">Usar fecha de hoy</button>
+                        </div>
+                        <div class="date-input-group">
+                            <input
+                                type="number"
+                                id="inputFecha"
+                                name="fecha"
+                                step="any"
+                                placeholder="Ej. 20261123"
+                                required
+                            >
+                            <input
+                                type="date"
+                                id="datePickerHelper"
+                                class="date-helper"
+                                title="Seleccionar fecha en calendario"
+                                aria-label="Seleccionar fecha en calendario"
+                            >
+                        </div>
+                        <span class="field-hint">Valor numérico <code>double</code> mayor a 0 (formato sugerido <code>AAAAMMDD</code>).</span>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="inputTipo">Tipo Entrenamiento</label>
+                            <input
+                                type="number"
+                                id="inputTipo"
+                                name="tipoEntrenamiento"
+                                step="any"
+                                value="1"
+                                placeholder="Ej. 1.0"
+                                required
+                            >
+                            <div class="quick-chips" data-target="inputTipo">
+                                <button type="button" class="chip" data-value="1">1 · Fuerza</button>
+                                <button type="button" class="chip" data-value="2">2 · Cardio</button>
+                                <button type="button" class="chip" data-value="3">3 · Funcional</button>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="inputEstado">Estado</label>
+                            <input
+                                type="number"
+                                id="inputEstado"
+                                name="estado"
+                                step="any"
+                                value="1"
+                                placeholder="Ej. 1.0"
+                                required
+                            >
+                            <div class="quick-chips" data-target="inputEstado">
+                                <button type="button" class="chip" data-value="1">1 · Presente</button>
+                                <button type="button" class="chip" data-value="0">0 · Ausente</button>
+                                <button type="button" class="chip" data-value="2">2 · Tardanza</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="submit" id="btnSubmit" class="btn btn-primary">
+                            <span class="btn-text">Registrar Asistencia</span>
+                        </button>
+                        <button type="button" id="btnResetForm" class="btn btn-ghost">Limpiar</button>
+                    </div>
+                </form>
+            </section>
+
+            <!-- Tabla Paginada GET /api/asistencia -->
+            <section class="card table-card" aria-labelledby="tableHeading">
+                <div class="card-header">
+                    <div>
+                        <h2 id="tableHeading">Registros de Asistencia</h2>
+                        <p class="card-desc">Consulta paginada mediante <code>GET /api/asistencia</code></p>
+                    </div>
+                    <span class="method-badge method-get">GET</span>
+                </div>
+
+                <div class="table-toolbar">
+                    <div class="search-box">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="11" cy="11" r="8"></circle>
+                            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                        </svg>
+                        <input
+                            type="search"
+                            id="inputSearch"
+                            placeholder="Filtrar resultados de esta página por nombre o ID..."
+                            aria-label="Filtrar resultados de la página actual"
+                        >
+                    </div>
+
+                    <div class="toolbar-right">
+                        <label for="selectPageSize" class="inline-label">Por página:</label>
+                        <select id="selectPageSize" class="select-input">
+                            <option value="5">5</option>
+                            <option value="10" selected>10</option>
+                            <option value="20">20</option>
+                            <option value="50">50</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="table-wrapper">
+                    <table id="asistenciaTable">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Nombre</th>
+                                <th>Fecha</th>
+                                <th>Tipo Entrenamiento</th>
+                                <th>Estado</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tableBody">
+                            <tr>
+                                <td colspan="5" class="table-placeholder">Cargando registros desde MySQL...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <footer class="pagination-bar">
+                    <div id="paginationInfo" class="pagination-info">Mostrando 0 de 0 registros</div>
+                    <div class="pagination-controls">
+                        <button type="button" id="btnPrevPage" class="btn btn-secondary btn-sm" disabled>
+                            &larr; Anterior
+                        </button>
+                        <div id="pageNumbers" class="page-numbers"></div>
+                        <button type="button" id="btnNextPage" class="btn btn-secondary btn-sm" disabled>
+                            Siguiente &rarr;
+                        </button>
+                    </div>
+                </footer>
+            </section>
+        </main>
+
+        <footer class="app-footer">
+            <span>API URL: <code id="apiUrlDisplay">/api/asistencia</code></span>
+            <span>CORS habilitado &bull; Manejo de códigos 400 / 500 &bull; Logs en <code>logs/api-asistencia.log</code></span>
+        </footer>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
+
